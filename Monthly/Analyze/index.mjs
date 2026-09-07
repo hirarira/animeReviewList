@@ -1,8 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
-const MONTHLY_DIR = './Monthly';
+const MONTHLY_DIR = '../';
 const TITLES_DIR = './Titles';
+
+// 解析対象のファイルを指定（例: ["2026年9月アニメ感想.md"]）
+// 空配列 [] にした場合は Monthly フォルダ内の全 .md ファイルを対象にする全件探索モードになります
+const TARGET_MD_LIST = [
+  "2026年9月アニメ感想.md"
+];
 
 // 出力先フォルダの作成
 if (!fs.existsSync(TITLES_DIR)) {
@@ -47,8 +53,10 @@ function parseMarkdown(filePath) {
 
       currentRawHeader = line.replace(/^###\s+/, '').trim();
 
-      // 話数 (#09 など) や サブタイトル (「...」) を除外して純粋な作品名を取得
+      // ラベル (【録画】【配信】等)、話数 (#09 等)、サブタイトル (「...」) を除外して純粋な作品名を取得
       let cleanTitle = currentRawHeader
+        .replace(/【.*?】/g, '')          // 【録画】【配信】などのラベルを削除
+        .replace(/\[.*?\]/g, '')          // [録画][配信] などの半角ブラケットも除去
         .replace(/\s+#\d+.*$/, '')        // #09 以降をトリム
         .replace(/\s+「.*?」.*$/, '')     // 「サブタイトル」以降をトリム
         .trim();
@@ -69,15 +77,30 @@ function parseMarkdown(filePath) {
   saveCurrentEntry();
 }
 
-// Monthly フォルダ内の全 md ファイルを解析
-if (fs.existsSync(MONTHLY_DIR)) {
-  const files = fs.readdirSync(MONTHLY_DIR).filter(f => f.endsWith('.md'));
-  for (const file of files) {
-    parseMarkdown(path.join(MONTHLY_DIR, file));
-  }
+// 解析対象ファイルのリスト決定
+let filesToProcess = [];
+
+if (TARGET_MD_LIST && TARGET_MD_LIST.length > 0) {
+  // 指定モード
+  filesToProcess = TARGET_MD_LIST;
+  console.log(`指定モード実行: ${filesToProcess.length} 件のファイルを対象にします。`);
+} else if (fs.existsSync(MONTHLY_DIR)) {
+  // 全件探索モード
+  filesToProcess = fs.readdirSync(MONTHLY_DIR).filter(f => f.endsWith('.md'));
+  console.log(`全件探索モード実行: ${MONTHLY_DIR}/ 内の ${filesToProcess.length} 件のファイルを対象にします。`);
 } else {
   console.error(`エラー: ${MONTHLY_DIR} フォルダが存在しません。`);
   process.exit(1);
+}
+
+// 対象ファイルを順次解析
+for (const file of filesToProcess) {
+  const filePath = path.join(MONTHLY_DIR, file);
+  if (fs.existsSync(filePath)) {
+    parseMarkdown(filePath);
+  } else {
+    console.warn(`警告: ファイルが見つかりません (${filePath})`);
+  }
 }
 
 // Windows等のファイル名に使えない禁用文字（: や / など）を安全な全角文字に置換
@@ -102,6 +125,7 @@ for (const [title, entries] of animeMap.entries()) {
     fileContent += `${entry.content}\n\n---\n\n`;
   }
 
+  // 既存ファイルがある場合は上書き（特定月のみ追加で処理したい場合等はアペンド処理に変更も可能）
   fs.writeFileSync(outputPath, fileContent, 'utf-8');
 }
 
