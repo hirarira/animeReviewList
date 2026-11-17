@@ -45,7 +45,12 @@ function parseMarkdown(filePath) {
   for (const line of lines) {
     // H1から日付を取得 (# 今日見たアニメ2026/09/01（火） など)
     const dateMatch = line.match(/(\d{4}\/\d{2}\/\d{2})/);
-    if (line.startsWith('#') && dateMatch) {
+    if (line.startsWith('# ') && dateMatch) {
+      // 日付を更新する前に、前の日の最後の作品ブロックを旧日付のまま保存する
+      // （先に currentDate を書き換えると、前日の最終セクションが翌日の日付で保存されてしまう）
+      saveCurrentEntry();
+      currentTitle = null;
+      currentBuffer = [];
       currentDate = dateMatch[1];
     }
 
